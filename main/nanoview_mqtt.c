@@ -42,9 +42,9 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
-            
+
             break;
-     
+
         case MQTT_EVENT_PUBLISHED:
             ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED, msg_id=%d", event->msg_id);
             break;
@@ -81,13 +81,17 @@ void nv_mqtt_task(struct task_config *tc) {
     esp_mqtt_client_handle_t mqtt_client = nv_mqtt_start();
     char *publish_string = NULL;
     while(true) {
-        if(xQueueReceive(tc->xMqttQueue, &publish_string, (TickType_t)(250 / portTICK_RATE_MS)) == pdPASS) {            
-            if (publish_string != NULL) {                
-                int msg_id = esp_mqtt_client_publish(mqtt_client, "/esp-mqtt/nanoview", publish_string, 0, 0, 0);
+        if(xQueueReceive(tc->xMqttQueue, &publish_string, (TickType_t)(250 / portTICK_PERIOD_MS)) == pdPASS) {
+            if (publish_string != NULL) {
+                if (strstr(publish_string, "live_power") != NULL) {
+                    esp_mqtt_client_publish(mqtt_client, "/esp-mqtt/nanoview/live_power", publish_string, 0, 0, 0);
+                } else {
+                    esp_mqtt_client_publish(mqtt_client, "/esp-mqtt/nanoview/accumulated_power", publish_string, 0, 0, 0);
+                }
                 free(publish_string);
                 publish_string = NULL;
             }
         }
-        //vTaskDelay((1000 / portTICK_RATE_MS));
+        //vTaskDelay((1000 / portTICK_PERIOD_MS));
     }
 }

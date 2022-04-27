@@ -10,8 +10,8 @@
 
 static const int RX_BUF_SIZE = 128;
 
-#define TXD_PIN (GPIO_NUM_4)
-#define RXD_PIN (GPIO_NUM_5)
+#define TXD_PIN (GPIO_NUM_17)
+#define RXD_PIN (GPIO_NUM_18)
 #define LED (GPIO_NUM_2)
 
 enum state {
@@ -31,8 +31,10 @@ void nv_init_uart() {
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
     };
     uart_param_config(UART_NUM_1, &uart_config);
+    ESP_LOGW("RX_TASK", "uart_set_pin");
     uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     // We won't use a buffer for sending data.
+    ESP_LOGW("RX_TASK", "uart_driver_install");
     uart_driver_install(UART_NUM_1, RX_BUF_SIZE * 2, 0, 0, NULL, 0);
 }
 
@@ -49,16 +51,16 @@ void nv_rx_task(struct task_config *tc)
     while (true) {
         do {
             start = 0;
-            uart_read_bytes(UART_NUM_1, (uint8_t *)&start, 1, 1000 / portTICK_RATE_MS);
+            uart_read_bytes(UART_NUM_1, (uint8_t *)&start, 1, 1000 / portTICK_PERIOD_MS);
         } while (start != 0xAA);
         gpio_set_level(LED, 1);
         // Got start
         read_type:
-            if (uart_read_bytes(UART_NUM_1, &(p.type), 1, 1000 / portTICK_RATE_MS) < 1)
+            if (uart_read_bytes(UART_NUM_1, &(p.type), 1, 1000 / portTICK_PERIOD_MS) < 1)
                 goto read_type;
 
         switch (p.type) {
-            case 0x10: 
+            case 0x10:
                 to_read = 36;
                 break;
             case 0x11:
@@ -71,9 +73,9 @@ void nv_rx_task(struct task_config *tc)
                 ESP_LOGW(RX_TASK_TAG, "Unknown packet typde: 0x%x", p.type);
                 continue; // Uknown packet type
         }
-        
+
         while (to_read > 0) {
-            rx_bytes = uart_read_bytes(UART_NUM_1, &(p.data[offset]), to_read, 1000 / portTICK_RATE_MS);
+            rx_bytes = uart_read_bytes(UART_NUM_1, &(p.data[offset]), to_read, 1000 / portTICK_PERIOD_MS);
             to_read -= rx_bytes;
             offset += rx_bytes;
         }
@@ -83,7 +85,7 @@ void nv_rx_task(struct task_config *tc)
         uint16_t packet_crc = *((uint16_t *) (&(p.data[offset-2])));
         ESP_LOGD(RX_TASK_TAG, "CRC: %04x == %04x [%s]", packet_crc, nv_crc(p.data, offset-2), ((packet_crc == nv_crc(p.data, offset-2)) ? "OK" : "BAD"));
         if (packet_crc == nv_crc(p.data, offset-2)) {
-            if (xQueueSend(tc->xNvMessageQueue, (void *)&p, (TickType_t)(250 / portTICK_RATE_MS)) != pdPASS) {
+            if (xQueueSend(tc->xNvMessageQueue, (void *)&p, (TickType_t)(250 / portTICK_PERIOD_MS)) != pdPASS) {
                 ESP_LOGE(RX_TASK_TAG, "Error placing NV packet on queue");
             }
         }

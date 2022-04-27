@@ -31,12 +31,14 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         sntp_stop();
-        if (s_retry_num < ESP_MAXIMUM_RETRY) {            
+        if (s_retry_num < ESP_MAXIMUM_RETRY) {
+            vTaskDelay(((1000 * s_retry_num) / portTICK_PERIOD_MS));
             esp_wifi_connect();
             s_retry_num++;
             ESP_LOGI(TAG, "retry to connect to the AP");
         } else {
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+            esp_restart();
         }
         ESP_LOGI(TAG,"connect to the AP fail");
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
@@ -52,7 +54,7 @@ void wifi_init_sta(void)
     s_wifi_event_group = xEventGroupCreate();
 
     ESP_ERROR_CHECK(esp_netif_init());
-    
+
     esp_netif_t *wifi_netif = esp_netif_create_default_wifi_sta();
     esp_netif_set_hostname(wifi_netif, "esp32-nanoview");
 

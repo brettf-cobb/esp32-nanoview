@@ -32,19 +32,6 @@ bool NV_MONITOR = false;
 void app_main()
 {
     printf("ESP32 NanoView v%s\n", VERSION);
-        
-    /* Print chip information */
-    esp_chip_info_t chip_info;
-    esp_chip_info(&chip_info);
-    printf("Running on %d CPU cores, WiFi%s%s, ",
-            chip_info.cores,
-            (chip_info.features & CHIP_FEATURE_BT) ? "/BT" : "",
-            (chip_info.features & CHIP_FEATURE_BLE) ? "/BLE" : "");
-
-    printf("silicon revision %d, ", chip_info.revision);
-
-    printf("%dMB %s flash\n", spi_flash_get_chip_size() / (1024 * 1024),
-            (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
 
     //Initialize NVS
     esp_err_t ret = nvs_flash_init();
@@ -73,7 +60,7 @@ void app_main()
             esp_restart();
     }
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    
+
     xTaskCreate((TaskFunction_t)console_task,      "console_task",   1024*4, &tc, configMAX_PRIORITIES, NULL);
     xTaskCreate((TaskFunction_t)nv_mqtt_task,      "mqtt_task",      1024*8, &tc, configMAX_PRIORITIES, NULL);
     xTaskCreate((TaskFunction_t)nv_processor_task, "processor_task", 1024*8, &tc, configMAX_PRIORITIES, NULL);
@@ -81,7 +68,7 @@ void app_main()
 
     /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
      * number of re-tries (WIFI_FAIL_BIT). The bits are set by event_handler() (see above) */
- 
+
     wifi_init_sta();
     /* xEventGroupWaitBits() returns the bits before the call returned, hence we can test which event actually
      * happened. */
@@ -100,7 +87,7 @@ void app_main()
         } else if (bits & WIFI_FAIL_BIT) {
                 ESP_LOGI(TAG, "Failed to connect to SSID:%s",
                         ESP_WIFI_SSID);
-                vTaskDelay((30000 / portTICK_RATE_MS));
+                vTaskDelay((30000 / portTICK_PERIOD_MS));
                 esp_restart();
         } else {
                 ESP_LOGE(TAG, "UNEXPECTED EVENT");
