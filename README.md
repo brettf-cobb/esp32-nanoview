@@ -26,72 +26,143 @@ The file content should be as below:
 #define BROKER_URL "mqtt://esp32-nanoview:yourpassword@192.168.0.123"
 ```
 
-## MQTT Setup
-Install an MQTT broker (eg: Mosquitto), and create `/etc/mosquitto/mosquitto.conf` with the below or similar.
-```port 1883
-log_dest syslog
-connection_messages true
-password_file /etc/mosquitto/pwfile
+## Home Assistant Setup  
+Install the Mosquitto MQTT broker Add-on
+
+**configuration.yaml**
+```
+mqtt:
+  sensor: !include sensor-mqtt.yaml
 ```
 
-Update/create your password_file (`/etc/mosquitto/pwfile`), eg: `mosquitto_passwd [-c] esp32-nanoview`
-
-Note: `-c` will create/overwrite existing files.
-
-## Telegraf Setup
-Telegraf can ingest JSON from the MQTT broker, and store data in InfluxDB. An example configuration is below. InfluxDB v1.x is recommended for now.
-
-Example `/etc/telegraf/telegraf.conf` below:
-
+**sensor-mqtt.yaml**
 ```
-# Below are just the defaults, whatever your distribution sets is probably fine. You likely just need to set up the outputs and inputs sections.
-[global_tags]
-[agent]
-  interval = "10s"
-  round_interval = true
-  metric_batch_size = 1000
-  metric_buffer_limit = 10000
-  collection_jitter = "0s"
-  flush_interval = "10s"
-  flush_jitter = "0s"
-  precision = ""
-  hostname = ""
-  omit_hostname = false
+- name: "Mains Voltage Reading"
+  state_topic: /esp-mqtt/nanoview/live_power
+  value_template: >-
+    {%-for i in value_json-%}
+      {{ i.volts|int if i.name == 'mains_voltage' and i.volts|int < 32768 }}
+    {%-endfor%}
+  expire_after: 20
+  device_class: energy
+  unit_of_measurement: V
 
-# Recommend using InfluDB v1.x to be able to use the included Grafana queries/dashboard examples.
-[[outputs.influxdb]]
-  urls = ["http://127.0.0.1:8086"]
-   database = "telegraf"
+- name: "Live Power - Total Reading"
+  state_topic: /esp-mqtt/nanoview/live_power
+  value_template: >-
+    {%-for i in value_json-%}
+      {{ i.value|int if i.channel == 1 and i.value|int < 32768 }}
+    {%-endfor%}
+  expire_after: 20
+  device_class: energy
+  unit_of_measurement: W
 
-# But you can output to InfluxDB v2 just fine too if you wish
-[[outputs.influxdb_v2]]
-  urls = ["http://localhost:9999"]
-  token = "your_influx_v2_token"
-  organization = "your_org"
-  bucket = "your_bucket"
+- name: "Total Power"
+  state_topic: /esp-mqtt/nanoview/accumulated_power
+  value_template: >-
+    {%-for i in value_json-%}
+      {{ i.value|int / 1000 if i.channel == 1 and i.value|int / 1000 < 8000 }}
+    {%-endfor%}
+  device_class: energy
+  unit_of_measurement: kWh
+  state_class: total_increasing
 
-# Consume the JSON from your MQTT broker
-[[inputs.mqtt_consumer]]
-  servers = ["tcp://esp32-nanoview:your_mqtt_password@192.168.0.123:1883"]
-  topics = [
-    "/esp-mqtt/nanoview"
-  ]
-  data_format = "json"
-  json_name_key = "name"
-  tag_keys = ["channel"]
-```
+- name: "Total Power - Plugs"
+  state_topic: /esp-mqtt/nanoview/accumulated_power
+  object_id: "total_power_plugs"
+  value_template: >-
+    {% set vars = namespace(plugs=0,lights=0) %}
+    {%-for i in value_json-%}  
+      {% if i.channel == 2 and i.value|int / 1000 < 8000 %}
+        {% set vars.plugs = i.value|int / 1000 %}
+      {% endif %}
+      {% if i.channel == 3 and i.value|int / 1000 < 8000 %}
+        {% set vars.lights = i.value|int / 1000 %}
+      {% endif %}
+    {%-endfor%}
+    {{ vars.plugs - vars.lights }}
+  device_class: energy
+  state_class: total_increasing
+  unit_of_measurement: kWh
 
-## Grafana Setup
-Install Grafana and add your InfluxDB v1.x datasource. 
-To import the included dashboard, configure the datasource as:
+- name: "Live Power - Geyser Reading"
+  state_topic: /esp-mqtt/nanoview/live_power
+  object_id: live_power_geyser_reading
+  value_template: >-
+    {%-for i in value_json-%}
+      {{ i.value|int if i.channel == 7 and i.value|int < 32768 }}
+    {%-endfor%}
+  expire_after: 20
+  device_class: energy
+  unit_of_measurement: W
 
-```
-Name: InfluxDB1
-Query Language: InfluxQL
-Database: telegraf (or whatever you set in your telegraf.conf)
-```
+- name: "Total Power - Geyser"
+  state_topic: /esp-mqtt/nanoview/accumulated_power
+  object_id: "total_power_geyser"
+  value_template: >-
+    {%-for i in value_json-%}
+      {{ i.value|int / 1000 if i.channel == 7 and i.value|int / 1000 < 8000 }}
+    {%-endfor%}
+  device_class: energy
+  unit_of_measurement: kWh
+  state_class: total_increasing
 
-Import the included `grafana/grafana-example.json` dashboard (Dashboards -> Manage -> Import) to get something like the below.
-Select your Influx v1.x datasource and set a name as desired. You'll likely need to update the annotations and field overrides for your own setup.
+- name: "Live Power - Stove Reading"
+  state_topic: /esp-mqtt/nanoview/live_power
+  value_template: >-
+    {%-for i in value_json-%}
+      {{ i.value|int if i.channel == 5 and i.value|int < 32768 }}
+    {%-endfor%}
+  expire_after: 20
+  device_class: energy
+  unit_of_measurement: W
 
-![Example Dashboard](/grafana/grafana-example.png?raw=true "Example Dashboard")
+- name: "Total Power - Stove"
+  state_topic: /esp-mqtt/nanoview/accumulated_power
+  object_id: "total_power_stove"
+  value_template: >-
+    {%-for i in value_json-%}
+      {{ i.value|int / 1000 if i.channel == 5 and i.value|int / 1000 < 8000 }}
+    {%-endfor%}
+  device_class: energy
+  unit_of_measurement: kWh
+  state_class: total_increasing
+
+- name: "Live Power - Lights Reading"
+  state_topic: /esp-mqtt/nanoview/live_power
+  value_template: >-
+    {%-for i in value_json-%}
+      {{ i.value|int if i.channel == 3 and i.value|int < 32768 }}
+    {%-endfor%}
+  expire_after: 20
+  device_class: energy
+  unit_of_measurement: W
+
+- name: "Total Power - Lights"
+  icon: "mdi:light-recessed"
+  state_topic: /esp-mqtt/nanoview/accumulated_power
+  value_template: >-
+    {%-for i in value_json-%}
+      {{ i.value|int / 1000 if i.channel == 3 and i.value|int / 1000 < 8000 }}
+    {%-endfor%}
+  device_class: energy
+  unit_of_measurement: kWh
+  state_class: total_increasing
+
+# Using math to calculate difference between 2 readings for cases where 1 CT monitors 2 circuits, and another monitors only 1 of the 2
+- name: "Live Power - Plugs Reading"
+  state_topic: /esp-mqtt/nanoview/live_power
+  value_template: >-
+    {% set vars = namespace(plugs=0,lights=0) %}
+    {%-for i in value_json-%}  
+      {% if i.channel == 2 and i.value|int < 32768 %}
+        {% set vars.plugs = i.value|int %}
+      {% endif %}
+      {% if i.channel == 3 and i.value|int < 32768 %}
+        {% set vars.lights = i.value|int %}
+      {% endif %}
+    {%-endfor%}
+    {{ vars.plugs - vars.lights }}
+  expire_after: 20
+  device_class: energy
+  unit_of_measurement: W
