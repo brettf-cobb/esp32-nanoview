@@ -27,7 +27,7 @@ The file content should be as below:
 ```
 
 ## Home Assistant Setup  
-Install the Mosquitto MQTT broker Add-on
+Install the Mosquitto MQTT broker Add-on, and follow the basic configuration
 
 **configuration.yaml**
 ```
@@ -36,6 +36,7 @@ mqtt:
 ```
 
 **sensor-mqtt.yaml**
+Configure the live wattage and kWh readings from MQTT as sensors
 ```
 - name: "Mains Voltage Reading"
   state_topic: /esp-mqtt/nanoview/live_power
@@ -166,3 +167,61 @@ mqtt:
   expire_after: 20
   device_class: energy
   unit_of_measurement: W
+  ```
+  
+**sensor-template.yaml**
+Configure sensors based on the MQTT sensors, so that if they are `Unknown` they report `0`  
+  ```
+  - sensor:
+    - name: "Mains Voltage"
+      device_class: energy
+      unit_of_measurement: V
+      state: >-
+        {{ states('sensor.mains_voltage_reading')|int(0) }}
+
+- sensor:
+    - name: "Live Power - Total"
+      device_class: energy
+      unit_of_measurement: W
+      state: >-
+        {{ states('sensor.live_power_total_reading')|int(0) }}
+- sensor:
+    - name: "Live Power - Geyser"
+      device_class: energy
+      unit_of_measurement: W
+      state: >-
+        {{ (states('sensor.live_power_geyser_reading')|int(0)) }}
+
+- sensor:
+    - name: "Live Power - Plugs"
+      device_class: energy
+      unit_of_measurement: W
+      state: >-
+        {{ (states('sensor.live_power_plugs_reading')|int(0)) }}
+
+- sensor:
+    - name: "Live Power - Lights"
+      device_class: energy
+      unit_of_measurement: W
+      state: >-
+        {{ states('sensor.live_power_lights_reading')|int(0) }}
+
+- sensor:
+    - name: "Live Power - Grid"
+      device_class: energy
+      unit_of_measurement: W
+      state: >-
+        {{ states('sensor.live_power_grid_reading')|int(0) }}
+
+- sensor:
+    - name: "Live Power - Stove"
+      device_class: energy
+      unit_of_measurement: W
+      state: >-
+        {{ states('sensor.live_power_stove_reading')|int(0) }}
+
+- binary_sensor:
+    - name: "Grid Status"
+      state: "{{ states('sensor.grid_voltage')|int(0) > 200 }}"
+
+```
