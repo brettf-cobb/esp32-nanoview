@@ -212,16 +212,4 @@ Configure sensors based on the MQTT sensors, so that if they are `Unknown` they 
       unit_of_measurement: W
       state: >-
         {{ states('sensor.live_power_grid_reading')|int(0) }}
-
-- sensor:
-    - name: "Live Power - Stove"
-      device_class: energy
-      unit_of_measurement: W
-      state: >-
-        {{ states('sensor.live_power_stove_reading')|int(0) }}
-
-- binary_sensor:
-    - name: "Grid Status"
-      state: "{{ states('sensor.grid_voltage')|int(0) > 200 }}"
-
 ```
